@@ -1,0 +1,63 @@
+name: Build Release
+
+on:
+  push:
+    tags:
+      - "*"
+
+jobs:
+  release:
+      runs-on: ubuntu-latest
+      name: Create Release
+      permissions:
+        packages: write
+        contents: write
+      steps:
+        - name: Checkout Repo
+          uses: actions/checkout@v4
+
+        - name: Create a Release
+          run: gh release create ${{ github.ref_name }} --generate-notes
+          env:
+            GH_TOKEN: ${{ github.token }}
+  build:
+    runs-on: ${{ matrix.os }}
+    needs: release
+    permissions:
+      packages: write
+      contents: write
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Install Node.js, NPM and Yarn
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies and make
+        run: npm install && npm run make
+
+      - name: Set VERSION variable from tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: echo "VERSION=${TAG#v}" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Upload
+        if: startsWith(matrix.os, 'ubuntu')
+        run: gh release upload ${{ github.ref_name }} out/make/deb/x64/melodify_${VERSION}_amd64.deb out/make/rpm/x64/melodify-${VERSION}-1.x86_64.rpm
+        env:
+          GH_TOKEN: ${{ github.token }} 
+
+      - name: Upload
+        if: startsWith(matrix.os, 'windows')
+        run: gh release upload ${{ github.ref_name }} "out/make/squirrel.windows/x64/melodify-${VERSION} Setup.exe"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
